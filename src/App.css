@@ -1,0 +1,143 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: "Inter", system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.app-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.latex-input {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.95rem;
+  padding: 14px 16px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.latex-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.example-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  padding: 5px 10px;
+  transition: all 0.15s;
+}
+
+.example-btn:hover {
+  background: #2d3f57;
+  border-color: #6366f1;
+  color: #e2e8f0;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 800px) {
+  .panels { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.panel h2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid #334155;
+}
+
+.katex-wrapper {
+  padding: 24px;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.katex-output {
+  color: #f1f5f9;
+  font-size: 1.4rem;
+}
+
+.katex-error {
+  color: #f87171;
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 16px;
+  white-space: pre-wrap;
+}
+
+.parse-error {
+  color: #f87171;
+  font-family: monospace;
+  font-size: 0.8rem;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.slt-wrapper {
+  padding: 16px;
+  min-height: 120px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.slt-empty {
+  color: #475569;
+  font-size: 0.85rem;
+  padding: 32px;
+  text-align: center;
+}
