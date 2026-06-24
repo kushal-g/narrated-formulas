@@ -4,20 +4,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      'katex': path.resolve(__dirname, '..','KaTeX','dist','katex.mjs'),
-    },
-  },
-  server: {
-    fs: {
-      allow: [
-        path.resolve(__dirname, '..', 'KaTeX', 'dist'),
-        path.resolve(__dirname, 'index.html'),
-      ],
-    },
-  },
+  plugins: [react()]
 })
 
 // \narrate{Number of 8-letter strings with i vowels}{| E_i |} = \narrate{Choose i locations for the vowels}{\binom{8}{i}} . \narrate{Choose the vowels}{5^i} . \narrate{Choose the remaining letters}{21^{8-i}}

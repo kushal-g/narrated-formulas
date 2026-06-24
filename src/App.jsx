@@ -1,8 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useRef, Component } from "react";
 import katex from "katex";
-import "../../KaTeX/dist/katex.min.css";
+import "katex/dist/katex.min.css";
 import { latexToSlt, splitFormulaAtTerms } from "./slt";
 import SltTree from "./SltTree";
+import SvgFormula from "./SvgFormula";
 import "./App.css";
 
 const NARRATED_EXAMPLE = {
@@ -14,6 +15,15 @@ const NARRATED_EXAMPLE = {
     { term: String.raw`21^{8-i}`,       narration: "Choose the remaining letters",               pos: "1" },
   ],
 };
+
+const EXAMPLES = [
+  { label: "binomial",   data: NARRATED_EXAMPLE },
+  { label: "quadratic",  data: { latex: String.raw`x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}` } },
+  { label: "chain rule", data: { latex: String.raw`\frac{d}{dx}[f(g(x))] = f'(g(x)) \cdot g'(x)` } },
+  { label: "sum",        data: { latex: String.raw`\sum_{k=1}^{n} k = \frac{n(n+1)}{2}` } },
+  { label: "Bayes",      data: { latex: String.raw`P(A|B) = \frac{P(B|A) \cdot P(A)}{P(B)}` } },
+  { label: "Gaussian",   data: { latex: String.raw`\int_{-\infty}^{\infty} e^{-x^2 / 2} \, dx = \sqrt{2\pi}` } },
+];
 
 function KaTeXRender({ latex }) {
   const ref = useRef(null);
@@ -213,6 +223,18 @@ export default function App() {
         <p className="subtitle">Math preview + Symbol Layout Tree</p>
       </header>
 
+      <div className="examples">
+        {EXAMPLES.map(ex => (
+          <button
+            key={ex.label}
+            className="example-btn"
+            onClick={() => setJsonText(JSON.stringify(ex.data, null, 2))}
+          >
+            {ex.label}
+          </button>
+        ))}
+      </div>
+
       <div className="input-row">
         <textarea
           className="latex-input"
@@ -244,6 +266,17 @@ export default function App() {
           </div>
         </section>
       </div>
+
+      {latex && (
+        <section className="panel" style={{ marginTop: '2rem' }}>
+          <h2>SVG Formula</h2>
+          <div className="katex-wrapper">
+            <ErrorBoundary resetKey={jsonText}>
+              <SvgFormula latex={latex} />
+            </ErrorBoundary>
+          </div>
+        </section>
+      )}
 
       {data && (
         <section className="panel" style={{ marginTop: '2rem' }}>
