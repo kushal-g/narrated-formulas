@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { pemdasSpacing } from './spacingTransform.js';
+import { applyPemdasSpacingToSvg } from './svgSpacingTransform.js';
 
 // Lazily inject the MathJax browser bundle (from public/) the first time
 // this component mounts. All subsequent callers share the same promise.
@@ -40,8 +40,13 @@ export default function SvgFormula({ latex }) {
     setError(null);
     let cancelled = false;
     loadMathJax()
-      .then(MathJax => MathJax.tex2svgPromise(pemdasSpacing(latex), { display: true }))
-      .then(node => { if (!cancelled) setHtml(node.outerHTML); })
+      .then(MathJax => MathJax.tex2svgPromise(latex, { display: true }))
+      .then(node => {
+        if (!cancelled) {
+          applyPemdasSpacingToSvg(node, latex);
+          setHtml(node.outerHTML);
+        }
+      })
       .catch(e => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
   }, [latex]);

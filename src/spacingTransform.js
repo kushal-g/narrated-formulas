@@ -28,18 +28,18 @@ const CMD_ARITY = {
 // Spacing (mu per side) for N distinct PEMDAS levels at a scope.
 // Row index = N-1. Within a row, index 0 = lowest-priority = most spacing.
 const MU_TABLE = [
-  [12],         // 1 level  — moderate
-  [20, 3],      // 2 levels — dramatic contrast
-  [22, 9, 2],   // 3 levels
+  [48],         // 1 level  — same max as multi-level rows
+  [48, 1],      // 2 levels
+  [48, 16, 1],  // 3 levels
 ];
 
 // Reduced table for the interior of ( ) groups.
 // Operators inside a paren group are subordinate; smaller spacing signals the
 // entire group is a single unit at the outer level.
 const MU_TABLE_PAREN = [
-  [7],          // 1 level
-  [11, 2],      // 2 levels
-  [13, 5, 1],   // 3 levels
+  [22],         // 1 level  — same max across rows
+  [22, 1],      // 2 levels
+  [22, 7, 1],   // 3 levels
 ];
 
 function tableMu(table, N, rank) {
@@ -346,4 +346,14 @@ function reconstruct(tokens, inParen = false) {
 
 export function pemdasSpacing(latex) {
   return reconstruct(groupParens(tokenize(latex)));
+}
+
+// Returns { muMap, N } describing operator spacing for the top-level scope of latex.
+// muMap: { [pemdas_level]: mu_per_side }  N: number of distinct levels found
+export function computeMuMap(latex) {
+  const levels = scanLevels(groupParens(tokenize(latex)));
+  const sorted = [...levels].sort((a, b) => a - b);
+  const N = sorted.length;
+  const muMap = Object.fromEntries(sorted.map((lvl, rank) => [lvl, tableMu(MU_TABLE, N, rank)]));
+  return { muMap, N };
 }
