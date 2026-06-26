@@ -35,6 +35,7 @@ const MO_REL = new Set([
 ]);
 
 const REL_MU = 30;
+const DEPTH_MARGIN_MU = 36; // extra mu per side around sub-expressions with intrinsic depth ≥ 3
 
 // Scoped nodes: treat as atomic operands — don't recurse for outer spacing
 const OPAQUE_NODES = new Set([
@@ -97,18 +98,162 @@ function computeMuScale(svgEl) {
   return (0.431 / 18) * svgUnitsPerEx;
 }
 
+function getMmlChildren(gEl) {
+  return Array.from(gEl.children).filter(
+    el => el.tagName === 'g' && el.hasAttribute('data-mml-node')
+  );
+}
+
+// ─── Intrinsic depth computation ───────────────────────────────────────────────
+//
+// Depth is measured bottom-up (tree height):
+//   atom                    → 1
+//   container               → 1 + max(arm depths)   (arms/radicand treated as transparent seqs)
+//   ^{single atom}          → 2   (trivial script)
+//   ^{multi-element expr}   → 3   (script arg is non-transparent when multi-element)
+//   plain mrow (sequence)   → max(child depths)      (transparent, no boundary added)
+//   paren-wrapped mrow      → 1 + max(inner depths)  (parens add one level)
+
+function computeScriptArgDepth(argEl) {
+  if (!argEl) return 2;
+  const node = argEl.getAttribute('data-mml-node');
+  const children = getMmlChildren(argEl);
+
+  // Direct atom as script arg: trivial, adds 1
+  if (node === 'mi' || node === 'mn' || node === 'mo') {
+    return 1 + computeDepth(argEl);
+  }
+
+  // mrow with a single child: still trivial, adds 1
+  if (node === 'mrow' && children.length === 1) {
+    return 1 + computeDepth(children[0]);
+  }
+
+  // mrow with multiple children: non-transparent — sequence adds +1, script boundary adds +1
+  if (node === 'mrow' && children.length > 1) {
+    const innerDepth = Math.max(...children.map(computeDepth));
+    return 1 + (1 + innerDepth);
+  }
+
+  // Any other complex node (e.g. \frac directly in script): adds 1
+  return 1 + computeDepth(argEl);
+}
+
+// Depth of a frac/sqrt arm: transparent if it's an mrow, otherwise full depth.
+function computeArmDepth(gEl) {
+  if (!gEl) return 1;
+  if (gEl.getAttribute('data-mml-node') === 'mrow') return computeDepthSeq(gEl);
+  return computeDepth(gEl);
+}
+
+// Depth of a sequence (mrow): transparent unless paren-wrapped ( … ).
+function computeDepthSeq(mrowEl) {
+  const children = getMmlChildren(mrowEl);
+  if (children.length === 0) return 1;
+
+  const first = children[0];
+  const last = children[children.length - 1];
+  const firstCp = first.getAttribute('data-mml-node') === 'mo' ? getMoCodepoint(first) : null;
+  const lastCp  = last.getAttribute('data-mml-node')  === 'mo' ? getMoCodepoint(last)  : null;
+
+  if (firstCp === 0x28 && lastCp === 0x29) {
+    // Paren-wrapped: adds one level around inner content
+    const inner = children.slice(1, -1);
+    if (inner.length === 0) return 1;
+    return 1 + Math.max(...inner.map(computeDepth));
+  }
+
+  return Math.max(...children.map(computeDepth));
+}
+
+// Intrinsic depth of any MathML SVG node.
+function computeDepth(gEl) {
+  if (!gEl) return 1;
+  const node = gEl.getAttribute('data-mml-node');
+  if (!node) return 1;
+
+  // Atoms — leaf nodes
+  if (node === 'mi' || node === 'mn' || node === 'mo' ||
+      node === 'mtext' || node === 'ms' || node === 'mspace') return 1;
+
+  const children = getMmlChildren(gEl);
+
+  // Scripts: asymmetric rule for the script argument
+  if (node === 'msup' || node === 'msub') {
+    const baseDepth   = children[0] ? computeDepth(children[0]) : 1;
+    const scriptDepth = children[1] ? computeScriptArgDepth(children[1]) : 2;
+    return Math.max(baseDepth, scriptDepth);
+  }
+  if (node === 'msubsup') {
+    const baseDepth = children[0] ? computeDepth(children[0]) : 1;
+    const subDepth  = children[1] ? computeScriptArgDepth(children[1]) : 2;
+    const supDepth  = children[2] ? computeScriptArgDepth(children[2]) : 2;
+    return Math.max(baseDepth, subDepth, supDepth);
+  }
+
+  // Fractions: 1 + max of arm depths (arms are transparent sequences)
+  if (node === 'mfrac') {
+    if (children.length === 0) return 1;
+    return 1 + Math.max(...children.map(computeArmDepth));
+  }
+
+  // Square root / nth root: 1 + depth of radicand (transparent sequence)
+  if (node === 'msqrt' || node === 'mroot') {
+    if (children.length === 0) return 1;
+    return 1 + Math.max(...children.map(computeArmDepth));
+  }
+
+  // Decorations (mover, munder, munderover): 1 + max of children
+  if (node === 'mover' || node === 'munder' || node === 'munderover') {
+    if (children.length === 0) return 1;
+    return 1 + Math.max(...children.map(computeDepth));
+  }
+
+  // mrow (sequence): transparent unless paren-wrapped
+  if (node === 'mrow') return computeDepthSeq(gEl);
+
+  // TeXAtom and other transparent wrappers
+  if (children.length === 0) return 1;
+  return Math.max(...children.map(computeDepth));
+}
+
 // ─── Core spacing pass ─────────────────────────────────────────────────────────
+
+// Shifts the script child of an msup/msub/msubsup to the right when the script
+// has intrinsic depth ≥ 3, making complex exponents visually distinct from their base.
+// Returns the number of extra SVG units added (for viewBox widening).
+function spaceScript(scriptNodeEl, muScale) {
+  const node = scriptNodeEl.getAttribute('data-mml-node');
+  const children = getMmlChildren(scriptNodeEl);
+  if (children.length < 2) return 0;
+
+  const extra = DEPTH_MARGIN_MU * muScale;
+  let totalExtra = 0;
+
+  const applyToArg = (argEl) => {
+    if (argEl && computeScriptArgDepth(argEl) >= 4) {
+      setTranslateX(argEl, getTranslateX(argEl) + extra);
+      totalExtra += extra;
+    }
+  };
+
+  if (node === 'msup')     { applyToArg(children[1]); }
+  if (node === 'msub')     { applyToArg(children[1]); }
+  if (node === 'msubsup')  { applyToArg(children[1]); applyToArg(children[2]); }
+
+  return totalExtra;
+}
 
 // Spaces the direct g[data-mml-node] children of mrowEl.
 // Returns the total extra SVG units added (so callers can update viewBox width).
 function spaceMrow(mrowEl, muMap, muScale, inParen) {
-  const children = Array.from(mrowEl.children).filter(
-    el => el.tagName === 'g' && el.hasAttribute('data-mml-node')
-  );
+  const children = getMmlChildren(mrowEl);
   if (children.length === 0) return 0;
 
   // Save original x-positions before any modification
   const origX = children.map(getTranslateX);
+  // Pre-compute intrinsic depth for each child (used for depth-margin logic below)
+  const depths = children.map(computeDepth);
 
   let offset = 0;      // cumulative SVG units added left of current position
   let prevType = 'start'; // 'start' | 'operand' | 'operator'
@@ -117,6 +262,14 @@ function spaceMrow(mrowEl, muMap, muScale, inParen) {
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     const node = child.getAttribute('data-mml-node');
+    const depthMargin = DEPTH_MARGIN_MU * muScale;
+    const isDeep = depths[i] >= 3;
+
+    // Add left margin before a deeply-nested sub-expression
+    if (isDeep && i > 0) {
+      offset += depthMargin;
+      totalAdded += depthMargin;
+    }
 
     // Resolve the operator codepoint: either from a direct mo, or from a
     // TeXAtom that wraps a single mo (MathJax boxes / and other Ord-class
@@ -150,6 +303,11 @@ function spaceMrow(mrowEl, muMap, muScale, inParen) {
       prevType = 'operand';
     } else if (OPAQUE_NODES.has(node)) {
       setTranslateX(child, origX[i] + offset);
+      if (node === 'msup' || node === 'msub' || node === 'msubsup') {
+        const scriptExtra = spaceScript(child, muScale);
+        offset += scriptExtra;
+        totalAdded += scriptExtra;
+      }
       prevType = 'operand';
     } else {
       // Transparent node (mrow, mstyle, mpadded, mphantom, …): shift and recurse
@@ -162,6 +320,12 @@ function spaceMrow(mrowEl, muMap, muScale, inParen) {
         // so they don't affect sibling positions here.
       }
       prevType = 'operand';
+    }
+
+    // Add right margin after a deeply-nested sub-expression
+    if (isDeep && i < children.length - 1) {
+      offset += depthMargin;
+      totalAdded += depthMargin;
     }
   }
 
